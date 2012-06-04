@@ -11,12 +11,11 @@ require 'json'
 require 'openssl'
 # require 'example_config'
 
-$auth_url = "https://auth.tfoundry.com"
-CONFIG = { :auth_url      => (ENV['ATT_BASE_DOMAIN']     ||"https://auth.tfoundry.com"),
-           :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
-           :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
-           :endpoint      => (ENV['ATT_API_ENDPOINT']   || 'http://api.tfoundry.com'),
-           :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/auth/att/callback')
+CONFIG = { :auth_url      => ("https://auth.tfoundry.com"),
+           :client_id     => ('e6b0570f56904fe81022efd6afa1ec99'), 
+           :client_secret => ('c68ae72a5c7aa68d'),
+           :endpoint      => ('http://api.tfoundry.com'),
+           :redirect_uri  => ('http://localhost:4567/auth/att/callback')
          }
 
 #FIXME, this is not secure
@@ -40,21 +39,21 @@ class ExampleServer < Sinatra::Base
 
   get '/auth/att/callback' do
     puts params
-    access_token_url = "#{CONFIG[:auth_url]}/oauth/token?redirect_uri=#{CGI.escape(CONFIG[:redirect_uri])}&code=#{params[:code]}client_id=#{CONFIG[:client_id]}&client_secret=#{CONFIG[:client_secret]}&grant_type=authorization_code"
+    access_token_url = "#{CONFIG[:auth_url]}/oauth/token?redirect_uri=#{CGI.escape(CONFIG[:redirect_uri])}&code=#{params[:code]}&client_id=#{CONFIG[:client_id]}&client_secret=#{CONFIG[:client_secret]}&grant_type=authorization_code"
     result = Faraday.post(access_token_url)
     p [:result, result]
     data = JSON.parse(result.body)
     @access_token = data['access_token']
     <<-EOE
     access_token = #{data['access_token']}
-    <a href="#{$auth_url}/me.json?access_token=#{access_token}">Me!</a>
+    <a href="#{CONFIG[:auth_url]}/me.json?access_token=#{access_token}">Me!</a>
     EOE
   end
 
   get '/me' do
     if @access_token
       p [:me, @access_token]
-      access_token_url = "#{$auth_url}/me.json?access_token=#{access_token}"
+      access_token_url = "#{CONFIG[:auth_url]}/me.json?access_token=#{access_token}"
       result = Faraday.get(access_token_url.to_s)
       JSON.parse(result)
     else
