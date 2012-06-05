@@ -1,27 +1,33 @@
 $stdout.sync = true
-$LOAD_PATH.unshift(File.dirname(__FILE__)+"/../lib/")
-$LOAD_PATH.unshift(File.dirname(__FILE__))
 require "rubygems"
+require 'bundler/setup'
 require 'uri'
 require 'cgi'
 require 'sinatra'
+require 'sinatra/synchrony'
 require 'faraday'
-require 'pry'
 require 'json'
 require 'openssl'
-# require 'example_config'
+require 'faraday_middleware'
+require 'hashie/mash'
+require 'faraday_middleware/response/mashify'
+require 'faraday_middleware/response/rashify'
+require 'pry'
+load File.dirname(__FILE__)+"/att_api.rb"
 
-CONFIG = { :auth_url      => ("https://auth.tfoundry.com"),
-           :client_id     => ('e6b0570f56904fe81022efd6afa1ec99'), 
-           :client_secret => ('c68ae72a5c7aa68d'),
-           :endpoint      => ('http://api.tfoundry.com'),
-           :redirect_uri  => ('http://localhost:4567/auth/att/callback')
+
+CONFIG = { :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
+           :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
+           :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
+           :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/users/att/callback'),
+           :scope         => CGI.escape('AccountDetails,NGLE,profile,locker')
          }
 
-#FIXME, this is not secure
-OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE unless OpenSSL::SSL::VERIFY_PEER==OpenSSL::SSL::VERIFY_NONE
+# FIXME, this is not secure
+OpenSSL::SSL::VERIFY_PEER = OpenSSL::SSL::VERIFY_NONE
 
 class ExampleServer < Sinatra::Base
+  register Sinatra::Synchrony  # can be removed if not needed or running on windows
   configure do
     enable :logging
     enable :inline_templates
@@ -29,39 +35,68 @@ class ExampleServer < Sinatra::Base
   end
 
   attr_accessor :access_token
-
-  get '/hi' do
-    'hi'
+  
+  def api(token=session[:access_token])
+    @api ||= AttApi.new(token)
   end
 
   get '/' do
-    url = "#{CONFIG[:auth_url]}/oauth/authorize?redirect_uri=#{CGI.escape(CONFIG[:redirect_uri])}&client_id=#{CONFIG[:client_id]}&scope=profile&response_type=code"
+    url = "#{CONFIG[:auth_url]}/oauth/authorize?redirect_uri=#{CGI.escape(CONFIG[:redirect_uri])}&client_id=#{CONFIG[:client_id]}&scope=#{CONFIG[:scope]}&response_type=code"
     erb "<a href=\"#{url}\">#{url}</a>"
   end
 
-  get '/auth/att/callback' do
-    puts params
+  get '/users/att/callback' do
+    p [:params, params ]
     access_token_url = "#{CONFIG[:auth_url]}/oauth/token?redirect_uri=#{CGI.escape(CONFIG[:redirect_uri])}&code=#{params[:code]}&client_id=#{CONFIG[:client_id]}&client_secret=#{CONFIG[:client_secret]}&grant_type=code"
     result = Faraday.post(access_token_url)
     p [:result, result]
-    data = JSON.parse(result.body)
-    @access_token = data['access_token']
+    @access_token = JSON.parse(result.body)['access_token']
+    session[:access_token] = @access_token
     erb <<-EOE
     <ul  data-role="listview" data-inset="false">
       <li><pre>#{result.body}</li>
       <li><a  data-ajax="false" href="#{CONFIG[:auth_url]}/me.json?access_token=#{access_token}">#{CONFIG[:auth_url]}/me.json?access_token=#{@access_token}</a></li>
-      <li><a  data-ajax="false" data-rel="dialog" href='/me?access_token=#{@access_token}'>me</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/profile?access_token=#{@access_token}'>my profile</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/location?access_token=#{@access_token}'>my location</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/api/locker/object/'>my Locker Objects</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/api/AddressBook/contacts/'>my AddressBook</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/api/AccountDetails/wireless/account'>my Wireless Account Details</a></li>
     </ul>
     EOE
   end
 
-  get '/me' do
+  get '/profile' do
     if params[:access_token] 
       result = Faraday.get("#{CONFIG[:auth_url]}/me.json?access_token=#{params[:access_token]}")
       erb "<pre>#{JSON.pretty_generate(JSON.parse(result.body))}</pre>"
     else
       'no access_token'
     end
+  end
+
+  # use the access_token to make an api call
+  get '/get/:service/:resource' do
+     result = Faraday.get(URI.parse("#{CONFIG[:api_endpoint]}/a1/#{params[:service]}/#{params[:resource]}?access_token=#{params[:access_token]}"))
+     erb "<pre>#{JSON.pretty_generate(JSON.parse(result.body))}</pre>"
+  end
+  
+  # use the att_api class and access_token to make an api call
+  get '/api/*' do
+    p [:api_proxy_to, params[:splat].join]
+    binding.pry
+    api.get(params[:splat].join)
+  end
+
+  
+  get '/location' do
+    result = Faraday.get(URI.parse("#{CONFIG[:api_endpoint]}/a1/#{params[:service]}/#{params[:resource]}?access_token=#{params[:access_token]}"))
+    @geo = JSON.parse(result.body)
+    erb :location
+  end
+  
+  get '/logout' do
+    session.each{|k,v| session.delete(k)}
+    redirect '/'
   end
   
 end
@@ -78,12 +113,14 @@ __END__
     <link rel="stylesheet" href="http://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.css" />
     <script src="http://code.jquery.com/jquery-1.6.4.min.js"></script>
     <script src="http://code.jquery.com/mobile/1.1.0/jquery.mobile-1.1.0.min.js"></script>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+    <script type="text/javascript" src="https://raw.github.com/HPNeo/gmaps/master/gmaps.js"></script>    
   </head>
   <body>
     <div data-role="page">
 
     	<div data-role="header">
-    		<h1>Oauth Sample</h1>
+    		<h1><a href='/'>Oauth Sample</a></h1>
     	</div><!-- /header -->
 
     	<div data-role="content">	
@@ -91,8 +128,16 @@ __END__
     	</div><!-- /content -->
 
     </div><!-- /page -->
-    
-      </div>
-    </div>
+  
   </body>
 </html>
+
+@@ location
+<div id="map"></div>
+<script type="text/javascript" charset="utf-8">
+new GMaps({
+  div: '#map',
+  lat: <%= @geo[lat]%>,
+  lng: <%= @geo['long']%>
+});
+</script>
