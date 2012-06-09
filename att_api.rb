@@ -15,34 +15,32 @@ require 'faraday_middleware/response/rashify'
 require 'pry'
 
 class AttApi   
-  API_ENDPOINT = ENV['ATT_API_ENDPOINT'] || 'https://api.tfoundry.com'
   attr_reader :connection
   attr_accessor :config, :access_token
   
   def self.default_config(opts={})
-     {  :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
+     {  :api_endpoint  => ENV['ATT_config[:api_endpoint]'] || 'https://api.tfoundry.com',
+        :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
         :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
         :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
         :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/auth/att/callback'),
         :scope         => CGI.escape('AccountDetails,NGLE,profile,locker'),
         :response_type => 'authorization_code',
-        :connection_options => {}
+        :connection_options => {:timeout => 20, :open_timeout => 20 }
+        # :ssl => { :ca_file => '/usr/lib/ssl/certs/ca-certificates.crt', :ca_path => "/usr/lib/ssl/certs", :verify=>false}
       }
   end
 
   def initialize(config, version='a1', opts={})
     config = self.class.default_config.merge(opts)
-    faraday_opts = { :timeout      => 20,
-                     :open_timeout => 20  
-                    # :ssl => { :ca_file => '/usr/lib/ssl/certs/ca-certificates.crt', :ca_path => "/usr/lib/ssl/certs", :verify=>false}
-                    }.merge(config[:connection_options])
+    faraday_opts = self.class.default_config[:connection_options].merge(config[:connection_options])
                 #replace ssl option with this to avoid validatoin, #{verify: false}  
     @access_token = config[:token] if config[:token]
     @connection ||= begin
-      conn = Faraday::Connection.new "#{API_ENDPOINT}/#{version}/", faraday_opts do |c|   
+      conn = Faraday::Connection.new "#{config[:api_endpoint]}/#{version}/", faraday_opts do |c|   
        c.request :json
        # c.request  :retry
-       # c.response :logger
+       c.response :logger
        c.response :json
        c.response :rashify
        # c.adapter :em_http

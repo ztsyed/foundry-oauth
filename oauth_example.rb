@@ -16,7 +16,8 @@ require 'pry'
 load File.dirname(__FILE__)+"/att_api.rb"
 
 
-CONFIG = { :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
+CONFIG = { :api_endpoint  => "https://api.tfoundry.com",
+           :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
            :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
            :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
            :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/users/att/callback'),
@@ -60,7 +61,7 @@ class ExampleServer < Sinatra::Base
       <li><a  data-ajax="false" data-rel="dialog" href='/location?access_token=#{@access_token}'>my location</a></li>
       <li><a  data-ajax="false" data-rel="dialog" href='/api/locker/object/'>my Locker Objects</a></li>
       <li><a  data-ajax="false" data-rel="dialog" href='/api/AddressBook/contacts/'>my AddressBook</a></li>
-      <li><a  data-ajax="false" data-rel="dialog" href='/api/AccountDetails/wireless/account'>my Wireless Account Details</a></li>
+      <li><a  data-ajax="false" data-rel="dialog" href='/get/accountdetails/wireless/account?access_token=#{@access_token}'>my Wireless Account Details</a></li>
     </ul>
     EOE
   end
@@ -75,23 +76,41 @@ class ExampleServer < Sinatra::Base
   end
 
   # use the access_token to make an api call
-  get '/get/:service/:resource' do
-     result = Faraday.get(URI.parse("#{CONFIG[:api_endpoint]}/a1/#{params[:service]}/#{params[:resource]}?access_token=#{params[:access_token]}"))
-     erb "<pre>#{JSON.pretty_generate(JSON.parse(result.body))}</pre>"
+  get '/get/:service/:resource/:operation' do
+    begin
+      result = Faraday.get("#{CONFIG[:api_endpoint]}/a1/#{params[:service]}/#{params[:resource]}/#{params[:operation]}?access_token=#{params[:access_token]}")
+      raise "ERROR: #{result.status}" unless result.success?
+      erb "request_headers: <pre>#{result.request_headers}</pre><hr>
+      Status: #{result.status}<br>
+      Body:<pre>#{JSON.pretty_generate(JSON.parse(result.body))}</pre>"
+    rescue Exception => e
+      # binding.pry   
+      erb "<pre>#{@result.body}</pre>"
+    end    
   end
   
   # use the att_api class and access_token to make an api call
   get '/api/*' do
     p [:api_proxy_to, params[:splat].join]
-    binding.pry
-    api.get(params[:splat].join)
+    begin
+      @result = api.get(params[:splat].join)      
+    rescue Exception => e
+      # binding.pry 
+    end
+    erb "<pre>#{@result.body}</pre>"
   end
 
   
   get '/location' do
-    result = Faraday.get(URI.parse("#{CONFIG[:api_endpoint]}/a1/#{params[:service]}/#{params[:resource]}?access_token=#{params[:access_token]}"))
-    @geo = JSON.parse(result.body)
-    erb :location
+    result = Faraday.get("#{CONFIG[:api_endpoint]}/a1/ngle/location?access_token=#{params[:access_token]}")
+    if result.success?
+      @geo = JSON.parse(result.body)
+      p [:geo, @geo]
+      @location = @geo[ "ns1.terminalLocationList"]["terminalLocation"]["currentLocation"]
+      erb :location
+    else
+      erb "there was an error <pre>#{result.inspect}</pre><br>body:<pre>#{result.body}</pre>"
+    end
   end
   
   get '/logout' do
@@ -137,7 +156,7 @@ __END__
 <script type="text/javascript" charset="utf-8">
 new GMaps({
   div: '#map',
-  lat: <%= @geo[lat]%>,
-  lng: <%= @geo['long']%>
+  lat: <%= @location["latitude"]%>,
+  lng: <%= @geo["longitude"]%>
 });
 </script>
