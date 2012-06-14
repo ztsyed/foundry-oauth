@@ -1,3 +1,6 @@
+
+Small Sinatra App for Foundry OAuth
+
 To try this app out locally, you can just use the default credentials supplied.  They work fine for local development
 
     git clone git@gist.github.com:95ead624c7085f3221a2.git gist-95ead624
