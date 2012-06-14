@@ -21,7 +21,7 @@ CONFIG = { :api_endpoint  => "https://api.tfoundry.com",
            :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
            :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
            :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/users/att/callback'),
-           :scope         => CGI.escape('AccountDetails,NGLE,profile,locker')
+           :scope         => CGI.escape('AccountDetails,profile,locker')
          }
 
 # FIXME, this is not secure
