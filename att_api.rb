@@ -21,10 +21,10 @@ class AttApi
   def self.default_config(opts={})
      {  :api_endpoint  => ENV['ATT_config[:api_endpoint]'] || 'https://api.tfoundry.com',
         :auth_url      => (ENV['ATT_BASE_DOMAIN']    || "https://auth.tfoundry.com"),
-        :client_id     => (ENV['ATT_CLIENT_ID']      || 'e6b0570f56904fe81022efd6afa1ec99'), 
-        :client_secret => (ENV['ATT_CLIENT_SECRET']  || 'c68ae72a5c7aa68d'),
+        :client_id     => (ENV['ATT_CLIENT_ID']      || '<<somedefaultclientid>>'), 
+        :client_secret => (ENV['ATT_CLIENT_SECRET']  || '<<somedefaultsecrect>>'),
         :redirect_uri  => (ENV['ATT_REDIRECT_URI']   || 'http://localhost:4567/auth/att/callback'),
-        :scope         => CGI.escape('AccountDetails,NGLE,profile,locker'),
+        :scope         => CGI.escape('AccountDetails,profile,locker'),
         :response_type => 'authorization_code',
         :connection_options => {:timeout => 20, :open_timeout => 20 }
         # :ssl => { :ca_file => '/usr/lib/ssl/certs/ca-certificates.crt', :ca_path => "/usr/lib/ssl/certs", :verify=>false}
